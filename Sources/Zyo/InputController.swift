@@ -28,15 +28,21 @@ final class InputController: IMKInputController {
     // MARK: IMKit 回调
 
     nonisolated override func recognizedEvents(_ sender: Any!) -> Int {
-        Int(NSEvent.EventTypeMask([.keyDown, .flagsChanged]).rawValue)
+        Int(NSEvent.EventTypeMask([.keyDown, .flagsChanged, .leftMouseDown, .rightMouseDown, .otherMouseDown]).rawValue)
     }
 
     nonisolated override func handle(_ event: NSEvent!, client sender: Any!) -> Bool {
         MainActor.assumeIsolated {
-            if event?.type == .flagsChanged {
+            switch event?.type {
+            case .flagsChanged:
                 return handleFlagsChanged(event, client: sender as? IMKTextInput)
+            case .leftMouseDown, .rightMouseDown, .otherMouseDown:
+                // 按住 Shift 点鼠标（Shift+点击选区）不算单按 Shift
+                shiftPressedAt = nil
+                return false
+            default:
+                return handleKeyDown(event, client: sender as? IMKTextInput)
             }
-            return handleKeyDown(event, client: sender as? IMKTextInput)
         }
     }
 
@@ -164,13 +170,16 @@ final class InputController: IMKInputController {
         return perform(composer.handle(key), client: client)
     }
 
-    /// Caps Lock 灯的状态和小写/大写对不上，交给 App 的字母大小写会乱，所以字母由输入法定好大小写后上屏，其余按键交还 App。
-    /// 小写模式下大小写由 Shift 决定；大写模式下和系统大写锁定一样，按不按 Shift 都是大写
+    /// 小写模式下大小写由 Shift 决定；大写模式下和系统大写锁定一样，按不按 Shift 都是大写。
+    /// 按键本身打出的字母已经符合要求时原样交还 App（vim、网页 j/k 等单字母快捷键要的是按键事件）；
+    /// Caps Lock 灯的状态和小写/大写对不上，大小写不符时才由输入法 insertText
     private func insertDirectEnglish(_ event: NSEvent, modifiers: NSEvent.ModifierFlags, client: IMKTextInput) -> Bool {
         guard modifiers.isDisjoint(with: [.command, .control, .option]),
               case let .character(c)? = Self.key(for: event, modifiers: modifiers), c.isLetter
         else { return false }
-        client.insertText(Self.mode == .uppercase ? c.uppercased() : String(c), replacementRange: Self.notFound)
+        let text = Self.mode == .uppercase ? c.uppercased() : String(c)
+        if event.characters == text { return false }
+        client.insertText(text, replacementRange: Self.notFound)
         return true
     }
 
