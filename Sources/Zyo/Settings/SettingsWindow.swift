@@ -138,33 +138,23 @@ private struct SettingsView: View {
                 .onChange(of: buffersSentence) { _, on in Preferences.buffersSentence = on }
             } header: {
                 Text("输入方案")
-            } footer: {
-                Text("开启后选词不立即上屏，可继续输入下一段，整句一起翻译；拼音选完后按空格或回车上屏中文。切换到其他 App 再回来后生效。")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
             }
 
             Section {
-                Picker(selection: $foreignLanguage) {
-                    ForEach(Preferences.foreignLanguages, id: \.self) { code in
-                        let name = Preferences.languageName(code)
-                        Text(Preferences.latinLanguages.contains(code) ? name : "\(name)（仅 中文→外语）").tag(code)
+                HStack {
+                    Picker("外语", selection: $foreignLanguage) {
+                        ForEach(Preferences.foreignLanguages, id: \.self) { code in
+                            Text(Preferences.languageName(code)).tag(code)
+                        }
                     }
-                } label: {
-                    IconLabel("外语", symbol: "globe", color: .green)
-                }
-                .onChange(of: foreignLanguage) { _, code in Preferences.foreignLanguage = code }
-                LabeledContent {
+                    .labelsHidden()
+                    .fixedSize()
+                    .onChange(of: foreignLanguage) { _, code in Preferences.foreignLanguage = code }
+                    Spacer()
                     packStatusView
-                } label: {
-                    IconLabel("中文 ⇄ \(Preferences.languageName(foreignLanguage))语言包", symbol: "arrow.down.circle", color: .orange)
                 }
             } header: {
                 Text("翻译语言")
-            } footer: {
-                Text("日、韩、俄、乌克兰、阿拉伯、泰、印地语用键盘打不出原文，只支持 中文 → 外语；外语 → 中文 方向按 英语 → 中文 处理。")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
             }
 
             Section("快捷键") {
