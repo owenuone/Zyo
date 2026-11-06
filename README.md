@@ -110,8 +110,6 @@ make dist       # 打包自带依赖的分发版 build/Zyo-<版本>.zip
 make log        # 查看实时日志
 ```
 
-架构和设计细节见 [CLAUDE.md](CLAUDE.md)。
-
 ## 致谢
 
 - [librime](https://github.com/rime/librime)：Rime 输入法引擎（BSD-3-Clause）
