@@ -22,10 +22,13 @@ final class SettingsWindowController {
             let size = window.frame.size
             window.setFrameOrigin(NSPoint(x: visible.midX - size.width / 2, y: visible.midY - size.height / 2))
         }
-        // 从输入法菜单打开时前台是别的 App，系统常会拒绝激活；orderFrontRegardless 保证窗口仍显示在最前
-        NSApp.activate()
-        window.makeKeyAndOrderFront(nil)
-        window.orderFrontRegardless()
+        // 从输入法菜单打开时前台是别的 App：协作式的 NSApp.activate() 会被拒绝（窗口显示了但不是 key），
+        // 所以等菜单收起后用 ignoringOtherApps 强制激活；orderFrontRegardless 兜底保证窗口在最前
+        DispatchQueue.main.async {
+            NSApp.activate(ignoringOtherApps: true)
+            window.makeKeyAndOrderFront(nil)
+            window.orderFrontRegardless()
+        }
     }
 
     private func makeWindow() -> NSWindow {
