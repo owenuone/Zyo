@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="zh-Hans">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>字游 图标与表情</title>
+<style>
+  :root { --bg:#F6F5F2; --card:#FFFFFF; --line:#E4E2DC; --ink:#1C1C1E; --muted:#55534E; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family: -apple-system, "PingFang SC", sans-serif; }
+  main { max-width: 1200px; margin: 0 auto; padding: 48px 24px 72px; display:flex; flex-direction:column; gap:28px; }
+  h1 { margin:0; font-size:36px; }
+  h2 { margin:0 0 14px; font-size:19px; }
+  p { margin:0; color:var(--muted); font-size:14px; line-height:1.65; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:18px; padding:24px; display:flex; flex-direction:column; gap:14px; }
+  .row { display:flex; align-items:flex-end; gap:28px; flex-wrap:wrap; }
+  .cell { display:flex; flex-direction:column; align-items:center; gap:8px; font-size:12.5px; color:var(--muted); }
+  .px { image-rendering: pixelated; }
+  .strip { padding:20px; border-radius:12px; }
+  .strip.light { background:#ECECEC; }
+  .strip.dark { background:#1E1E1F; }
+  .strip.dark .cell { color:#BDBDBD; }
+  .faces { display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:16px; }
+  .face { border:1px solid var(--line); border-radius:12px; padding:12px; display:flex; flex-direction:column; align-items:center; gap:6px; }
+  .face .crop { width:180px; height:180px; background-image:url(png/expressions.png); background-size:720px 180px; }
+  .face b { font-size:15px; }
+  .face span { font-size:12.5px; color:var(--muted); text-align:center; }
+  code { font-size:12.5px; background:#EFEDE8; padding:1px 5px; border-radius:4px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>字游 · 图标与表情</h1>
+    <p>源文件是同目录的 SVG，PNG 和 <code>AppIcon.icns</code> 都由它们导出。16 / 32px 用简化版 <code>app-icon-small.svg</code>，64px 以上用完整版 <code>app-icon.svg</code>。</p>
+  </header>
+
+  <section class="card">
+    <h2>App 图标：实际导出的 PNG</h2>
+    <div class="strip light">
+      <div class="row">
+        <div class="cell"><img src="png/app-icon-256.png" width="256" height="256" alt="256px">256</div>
+        <div class="cell"><img src="png/app-icon-128.png" width="128" height="128" alt="128px">128</div>
+        <div class="cell"><img src="png/app-icon-64.png" width="64" height="64" alt="64px">64</div>
+        <div class="cell"><img src="png/app-icon-32.png" width="32" height="32" alt="32px">32 简化</div>
+        <div class="cell"><img src="png/app-icon-16.png" width="16" height="16" alt="16px">16 简化</div>
+      </div>
+    </div>
+    <div class="strip dark">
+      <div class="row">
+        <div class="cell"><img src="png/app-icon-128.png" width="128" height="128" alt="128px">128</div>
+        <div class="cell"><img src="png/app-icon-64.png" width="64" height="64" alt="64px">64</div>
+        <div class="cell"><img src="png/app-icon-32.png" width="32" height="32" alt="32px">32 简化</div>
+        <div class="cell"><img src="png/app-icon-16.png" width="16" height="16" alt="16px">16 简化</div>
+      </div>
+    </div>
+    <h2 style="margin-top:8px">小尺寸放大看像素</h2>
+    <div class="row">
+      <div class="cell"><img class="px" src="png/app-icon-32.png" width="128" height="128" alt="32px 放大 4 倍">32px × 4</div>
+      <div class="cell"><img class="px" src="png/app-icon-16.png" width="128" height="128" alt="16px 放大 8 倍">16px × 8</div>
+    </div>
+    <p>简化版去掉了高光、腮红和嘴，描边加粗，头放大，保证小尺寸下还能看出「水滴 + 白脸 + 两只眼」。</p>
+  </section>
+
+  <section class="card">
+    <h2>表情（候选窗提示用，建议）</h2>
+    <div class="faces">
+      <div class="face"><div class="crop" style="background-position:0 0" role="img" aria-label="开心"></div><b>开心</b><span>默认；切换方向提示「中文 → 英语」</span></div>
+      <div class="face"><div class="crop" style="background-position:-180px 0" role="img" aria-label="思考"></div><b>思考</b><span>「词库部署中」</span></div>
+      <div class="face"><div class="crop" style="background-position:-360px 0" role="img" aria-label="睡觉"></div><b>睡觉</b><span>切到直接英文：字游休息</span></div>
+      <div class="face"><div class="crop" style="background-position:-540px 0" role="img" aria-label="惊喜"></div><b>惊喜</b><span>「词库已更新」</span></div>
+    </div>
+    <p>这里只是设计稿，候选窗现在还是纯文字提示，要用的话得改 <code>CandidatePanel</code>。</p>
+  </section>
+</main>
+</body>
+</html>

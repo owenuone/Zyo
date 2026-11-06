@@ -1,0 +1,77 @@
+# 新世纪五笔方案。上游 byujiang/wubi06_rime 的 schema 依赖未打包的 kaomoji、emoji_suggestion 词典，
+# 并混有无效的 patch 段，所以只取它的词典 wubi06.dict.yaml，方案按 lotem/rime-wubi98 的结构重写
+schema:
+  schema_id: wubi06
+  name: "新世纪五笔"
+  version: "0.1"
+  author:
+    - 發明人 王永民先生
+  description: |
+    新世纪五笔，词典来自 byujiang/wubi06_rime（GPL-3.0）
+    敲 z 鍵進入拼音反查
+  dependencies:
+    - pinyin_simp
+
+switches:
+  - name: ascii_mode
+    reset: 0
+    states: [ 中文, 西文 ]
+  - name: full_shape
+    states: [ 半角, 全角 ]
+  - name: extended_charset
+    states: [ 通用, 增廣 ]
+
+engine:
+  processors:
+    - ascii_composer
+    - recognizer
+    - key_binder
+    - speller
+    - punctuator
+    - selector
+    - navigator
+    - express_editor
+  segmentors:
+    - ascii_segmentor
+    - matcher
+    - abc_segmentor
+    - punct_segmentor
+    - fallback_segmentor
+  translators:
+    - punct_translator
+    - reverse_lookup_translator
+    - table_translator
+
+speller:
+  delimiter: " ;'"
+  max_code_length: 4
+
+translator:
+  dictionary: wubi06
+  enable_charset_filter: true
+  enable_sentence: true
+  enable_encoder: true
+  encode_commit_history: true
+  max_phrase_length: 4
+  disable_user_dict_for_patterns:
+    - "^z.*$"
+
+reverse_lookup:
+  dictionary: pinyin_simp
+  prefix: "z"
+  suffix: "'"
+  preedit_format:
+    - xform/([nl])v/$1ü/
+    - xform/([nl])ue/$1üe/
+    - xform/([jqxy])v/$1u/
+
+punctuator:
+  import_preset: default
+
+key_binder:
+  import_preset: default
+
+recognizer:
+  import_preset: default
+  patterns:
+    reverse_lookup: "^z[a-z]*'?$"

@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 240" width="960" height="240">
+  <!-- 四个表情，从左到右：开心、思考、睡觉、惊喜 -->
+  <defs>
+    <linearGradient id="gHead" x1="0.2" y1="0" x2="0.8" y2="1">
+      <stop offset="0" stop-color="#9BEDE2"/>
+      <stop offset="0.55" stop-color="#5ED3C5"/>
+      <stop offset="1" stop-color="#36B3A4"/>
+    </linearGradient>
+    <g id="body">
+      <path d="M150 18 C126 34 106 44 86 54 C54 72 36 104 36 140 C36 186 72 214 118 214 C164 214 200 186 200 140 C200 108 184 84 164 68 C150 56 144 40 150 18 Z" fill="url(#gHead)" stroke="#233040" stroke-width="6" stroke-linejoin="round"/>
+      <ellipse cx="80" cy="88" rx="20" ry="9" transform="rotate(-35 80 88)" fill="#FFFFFF" opacity="0.55"/>
+      <path d="M52 128 C52 104 72 98 92 104 C106 108 130 108 144 104 C164 98 184 104 184 128 L184 158 C184 186 162 199 118 199 C74 199 52 186 52 158 Z" fill="#FFFFFF" stroke="#2FA596" stroke-width="2"/>
+      <ellipse cx="72" cy="170" rx="11" ry="7" fill="#FFC6CD"/>
+      <ellipse cx="164" cy="170" rx="11" ry="7" fill="#FFC6CD"/>
+    </g>
+    <path id="star" d="M0 -11 L3 -3 L11 0 L3 3 L0 11 L-3 3 L-11 0 L-3 -3 Z" fill="#F2B544"/>
+  </defs>
+
+  <!-- 开心 -->
+  <g>
+    <use href="#body"/>
+    <ellipse cx="91" cy="146" rx="13" ry="15" fill="#141A20"/>
+    <ellipse cx="145" cy="146" rx="13" ry="15" fill="#141A20"/>
+    <circle cx="87" cy="140" r="5" fill="#FFFFFF"/>
+    <circle cx="141" cy="140" r="5" fill="#FFFFFF"/>
+    <path d="M107 161 Q118 163 129 161 Q127 179 118 179 Q109 179 107 161 Z" fill="#E4546A" stroke="#233040" stroke-width="2" stroke-linejoin="round"/>
+    <ellipse cx="118" cy="173.5" rx="5.5" ry="3.5" fill="#FF9EAA"/>
+  </g>
+
+  <!-- 思考：眼睛往上看，小圆嘴，旁边冒想法泡泡 -->
+  <g transform="translate(240 0)">
+    <use href="#body"/>
+    <ellipse cx="95" cy="141" rx="12" ry="14" fill="#141A20"/>
+    <ellipse cx="149" cy="141" rx="12" ry="14" fill="#141A20"/>
+    <circle cx="98" cy="135" r="4.5" fill="#FFFFFF"/>
+    <circle cx="152" cy="135" r="4.5" fill="#FFFFFF"/>
+    <ellipse cx="120" cy="173" rx="6" ry="5" fill="#E4546A" stroke="#233040" stroke-width="2"/>
+    <circle cx="42" cy="44" r="8" fill="#7CCFC4"/>
+    <circle cx="26" cy="24" r="5.5" fill="#7CCFC4"/>
+    <circle cx="14" cy="9" r="3.5" fill="#7CCFC4"/>
+  </g>
+
+  <!-- 睡觉：闭眼，小嘴，zz -->
+  <g transform="translate(480 0)">
+    <use href="#body"/>
+    <path d="M78 147 Q91 157 104 147" fill="none" stroke="#141A20" stroke-width="4.5" stroke-linecap="round"/>
+    <path d="M132 147 Q145 157 158 147" fill="none" stroke="#141A20" stroke-width="4.5" stroke-linecap="round"/>
+    <path d="M111 172 Q118 177 125 172" fill="none" stroke="#233040" stroke-width="3" stroke-linecap="round"/>
+    <text x="196" y="76" font-family="Inter, Helvetica, sans-serif" font-weight="800" font-size="28" fill="#2FA596">z</text>
+    <text x="216" y="50" font-family="Inter, Helvetica, sans-serif" font-weight="800" font-size="19" fill="#2FA596">z</text>
+  </g>
+
+  <!-- 惊喜：大眼双高光，张大嘴，星星 -->
+  <g transform="translate(720 0)">
+    <use href="#body"/>
+    <ellipse cx="91" cy="145" rx="15" ry="17" fill="#141A20"/>
+    <ellipse cx="145" cy="145" rx="15" ry="17" fill="#141A20"/>
+    <circle cx="86" cy="138" r="5.5" fill="#FFFFFF"/>
+    <circle cx="140" cy="138" r="5.5" fill="#FFFFFF"/>
+    <circle cx="96" cy="151" r="2.5" fill="#FFFFFF"/>
+    <circle cx="150" cy="151" r="2.5" fill="#FFFFFF"/>
+    <ellipse cx="118" cy="175" rx="12" ry="11" fill="#E4546A" stroke="#233040" stroke-width="2"/>
+    <ellipse cx="118" cy="180" rx="6.5" ry="4" fill="#FF9EAA"/>
+    <use href="#star" transform="translate(210 74)"/>
+    <use href="#star" transform="translate(28 66) scale(0.7)"/>
+    <use href="#star" transform="translate(196 40) scale(0.5)"/>
+  </g>
+</svg>

@@ -1,0 +1,12 @@
+# Zyo 对雾凇 default.yaml 的补丁：只部署用到的方案（含极点五笔 86），每页 6 个候选
+patch:
+  schema_list:
+    - schema: rime_ice
+    - schema: double_pinyin_flypy
+    - schema: double_pinyin_mspy
+    - schema: double_pinyin
+    - schema: wubi86_jidian
+    - schema: wubi98
+    - schema: wubi06
+    - schema: pinyin_simp  # 五笔 z 键拼音反查的词典，列在这里才会被编译；设置窗口不显示
+  menu/page_size: 6
