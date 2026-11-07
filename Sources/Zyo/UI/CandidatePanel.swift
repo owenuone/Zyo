@@ -20,6 +20,7 @@ final class CandidatePanel {
     var onCommitTranslation: (() -> Void)?
 
     private let panel: NSPanel
+    private let glass = NSGlassEffectView()
     private let view = CandidateView()
     private var flashHideTask: Task<Void, Never>?
 
@@ -37,30 +38,12 @@ final class CandidatePanel {
         panel.hidesOnDeactivate = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
 
-        // 用 maskImage 而不是 layer 圆角裁剪，窗口阴影才会跟随圆角
-        let background = NSVisualEffectView()
-        background.material = .popover
-        background.blendingMode = .behindWindow
-        background.state = .active
-        background.maskImage = Self.roundedMask(radius: CandidateView.cornerRadius)
         view.autoresizingMask = [.width, .height]
-        background.addSubview(view)
-        panel.contentView = background
+        glass.contentView = view
+        panel.contentView = glass
 
         view.onSelectCandidate = { [weak self] in self?.onSelectCandidate?($0) }
         view.onCommitTranslation = { [weak self] in self?.onCommitTranslation?() }
-    }
-
-    private static func roundedMask(radius: CGFloat) -> NSImage {
-        let edge = radius * 2 + 1
-        let mask = NSImage(size: NSSize(width: edge, height: edge), flipped: false) { rect in
-            NSColor.black.setFill()
-            NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius).fill()
-            return true
-        }
-        mask.capInsets = NSEdgeInsets(top: radius, left: radius, bottom: radius, right: radius)
-        mask.resizingMode = .stretch
-        return mask
     }
 
     func show(_ model: CandidatePanelModel, cursorRect: NSRect) {
@@ -77,6 +60,7 @@ final class CandidatePanel {
         }
         origin.x = min(max(origin.x, visible.minX), visible.maxX - size.width)
 
+        glass.cornerRadius = view.cornerRadius
         panel.setFrame(NSRect(origin: origin, size: size), display: true)
         panel.invalidateShadow()
         panel.orderFrontRegardless()
@@ -115,22 +99,25 @@ private final class CandidateView: NSView {
     }
 
     private(set) var contentSize: NSSize = .zero
+    private(set) var cornerRadius: CGFloat = 0
     private var candidateRects: [NSRect] = []
     private var translationRect: NSRect = .zero
     private var hovered: Target? {
         didSet { if hovered != oldValue { needsDisplay = true } }
     }
 
-    static let cornerRadius: CGFloat = 10
-    private let padding: CGFloat = 6
-    private let itemPadX: CGFloat = 8
-    private let itemPadY: CGFloat = 4
+    private let padding: CGFloat = 3
+    private let itemPadX: CGFloat = 6
+    private let itemPadY: CGFloat = 2
+    /// 两行时窗口的圆角；只有一行时做成胶囊形
+    private let multiRowCornerRadius: CGFloat = 15
     /// 候选行与译文行之间分隔线上下各留的间距
-    private let separatorGap: CGFloat = 4
+    private let separatorGap: CGFloat = 2
     private let maxTranslationWidth: CGFloat = 520
-    private let candidateFont = NSFont.systemFont(ofSize: 17)
+    private let candidateFont = NSFont.systemFont(ofSize: 16)
     private let indexFont = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .regular)
-    private let translationFont = NSFont.systemFont(ofSize: 14)
+    private let indexGap: CGFloat = 4
+    private let translationFont = NSFont.systemFont(ofSize: 13)
     private let flashFont = NSFont.systemFont(ofSize: 15, weight: .medium)
     private let symbolGap: CGFloat = 6
     private var separatorY: CGFloat?
@@ -144,11 +131,11 @@ private final class CandidateView: NSView {
 
     private func candidateString(_ index: Int, active: Bool) -> NSAttributedString {
         let text = NSMutableAttributedString(
-            string: "\(index + 1) ",
+            string: "\(index + 1)",
             attributes: [
                 .font: indexFont,
                 .foregroundColor: active ? NSColor.white.withAlphaComponent(0.8) : NSColor.secondaryLabelColor,
-                .baselineOffset: 2,
+                .kern: indexGap,
             ]
         )
         text.append(NSAttributedString(
@@ -200,44 +187,39 @@ private final class CandidateView: NSView {
             width: rowWidth,
             height: ceil(bounds.height) + itemPadY * 2
         )
-        contentSize = NSSize(width: rowWidth + padding * 2, height: translationRect.maxY + padding)
+        // 文字比候选行窄时，译文行与候选行同宽，高亮才能左右对齐
+        translationRect.size.width = max(translationRect.width, candidateRowWidth)
+        contentSize = NSSize(width: translationRect.width + padding * 2, height: translationRect.maxY + padding)
+        cornerRadius = separatorY == nil ? contentSize.height / 2 : multiRowCornerRadius
     }
 
     // MARK: 绘制
 
     override func draw(_ dirtyRect: NSRect) {
-        // 毛玻璃上叠一层半透明底色：否则深色内容（如终端）会透上来，底色发灰、描边发白
-        let radius = Self.cornerRadius
-        let outline = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: radius, yRadius: radius)
-        NSColor.windowBackgroundColor.withAlphaComponent(0.5).setFill()
-        outline.fill()
-        NSColor.separatorColor.setStroke()
-        outline.stroke()
-
         for (index, rect) in candidateRects.enumerated() {
             let highlighted = index == model.highlightedIndex
             let active = highlighted && model.focus == .candidates
             if highlighted {
                 (active ? NSColor.controlAccentColor : NSColor.unemphasizedSelectedContentBackgroundColor).setFill()
-                NSBezierPath(roundedRect: rect, xRadius: 6, yRadius: 6).fill()
+                Self.capsule(rect).fill()
             } else if hovered == .candidate(index) {
                 NSColor.labelColor.withAlphaComponent(0.08).setFill()
-                NSBezierPath(roundedRect: rect, xRadius: 6, yRadius: 6).fill()
+                Self.capsule(rect).fill()
             }
             candidateString(index, active: active).draw(at: NSPoint(x: rect.minX + itemPadX, y: rect.minY + itemPadY))
         }
 
         if let separatorY {
-            NSColor.separatorColor.setFill()
+            NSColor.separatorColor.withAlphaComponent(0.5).setFill()
             NSRect(x: padding + itemPadX, y: separatorY, width: bounds.width - (padding + itemPadX) * 2, height: 1).fill()
         }
 
         if model.focus == .translation {
             NSColor.controlAccentColor.setFill()
-            NSBezierPath(roundedRect: translationRect, xRadius: 6, yRadius: 6).fill()
+            Self.capsule(translationRect).fill()
         } else if hovered == .translation {
             NSColor.labelColor.withAlphaComponent(0.08).setFill()
-            NSBezierPath(roundedRect: translationRect, xRadius: 6, yRadius: 6).fill()
+            Self.capsule(translationRect).fill()
         }
         var textRect = translationRect.insetBy(dx: itemPadX, dy: itemPadY)
         if let symbolImage {
@@ -249,6 +231,12 @@ private final class CandidateView: NSView {
             textRect.size.width -= ceil(size.width) + symbolGap
         }
         translationString().draw(with: textRect, options: [.usesLineFragmentOrigin, .usesFontLeading])
+    }
+
+    /// 单行时是胶囊形；译文折成多行时圆角封顶，避免变成椭圆
+    private static func capsule(_ rect: NSRect) -> NSBezierPath {
+        let radius = min(rect.height / 2, 14)
+        return NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius)
     }
 
     // MARK: 鼠标
