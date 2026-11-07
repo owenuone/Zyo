@@ -14,6 +14,9 @@ final class RimeRuntime {
     static let shared = RimeRuntime()
 
     private(set) var isReady = false
+    /// 每次重新部署加 1。librime 用 Session 对象地址当 id，清掉所有 session 后新建的 session 可能复用旧地址，
+    /// 只靠 find_session 会把别的会话的 session 误认成自己的，所以要同时比对代数
+    private(set) var generation = 0
     private var started = false
     /// rime 已成功初始化；启动失败时 isReady 永远不会变为 true
     private var initialized = false
@@ -73,6 +76,7 @@ final class RimeRuntime {
         }
         isReady = false
         rimeAPI.cleanup_all_sessions()
+        generation += 1
         guard rimeAPI.start_maintenance(1) != 0 else {
             isReady = true
             return
@@ -108,10 +112,17 @@ final class RimeRuntime {
 final class RimeEngine: ConversionEngine {
     private(set) var state = EngineState()
     private var session: RimeSessionId = 0
+    /// 创建 session 时的部署代数，与 RimeRuntime.generation 不同说明 session 已被重新部署清掉
+    private var sessionGeneration = 0
     private var schemeID: String?
 
-    deinit {
-        if session != 0 {
+    /// session 仍属于自己；重新部署后旧 id 可能已被别的会话复用，不能再碰
+    private var ownsSession: Bool {
+        session != 0 && sessionGeneration == RimeRuntime.shared.generation
+    }
+
+    isolated deinit {
+        if ownsSession {
             _ = rimeAPI.destroy_session(session)
         }
     }
@@ -129,7 +140,7 @@ final class RimeEngine: ConversionEngine {
     }
 
     func takeCommit() -> String? {
-        guard session != 0 else { return nil }
+        guard ownsSession else { return nil }
         var commit = RimeCommit()
         commit.data_size = rimeStructSize(RimeCommit.self)
         guard rimeAPI.get_commit(session, &commit) != 0 else { return nil }
@@ -164,7 +175,7 @@ final class RimeEngine: ConversionEngine {
     }
 
     func clear() {
-        if session != 0 {
+        if ownsSession {
             rimeAPI.clear_composition(session)
         }
         state = EngineState()
@@ -173,11 +184,12 @@ final class RimeEngine: ConversionEngine {
     // MARK: 私有
 
     private func ensureSession() -> Bool {
-        if RimeRuntime.shared.isReady, session != 0, rimeAPI.find_session(session) != 0 { return true }
+        if RimeRuntime.shared.isReady, ownsSession, rimeAPI.find_session(session) != 0 { return true }
         // 重新部署会清掉所有 session，旧的输入状态随之失效，不清掉的话 marked text 会卡住
         state = EngineState()
         guard RimeRuntime.shared.isReady else { return false }
         session = rimeAPI.create_session()
+        sessionGeneration = RimeRuntime.shared.generation
         guard session != 0 else {
             log.error("创建 rime session 失败")
             return false

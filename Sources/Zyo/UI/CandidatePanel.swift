@@ -73,7 +73,7 @@ final class CandidatePanel {
 
         var origin = NSPoint(x: anchor.minX, y: anchor.minY - size.height - 4)
         if origin.y < visible.minY {
-            origin.y = anchor.maxY + 4
+            origin.y = min(anchor.maxY + 4, visible.maxY - size.height)
         }
         origin.x = min(max(origin.x, visible.minX), visible.maxX - size.width)
 

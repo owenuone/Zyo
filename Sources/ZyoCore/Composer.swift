@@ -192,7 +192,8 @@ public struct Composer {
         if focus == .translation {
             switch key {
             case .space, .enter:
-                return .commitTranslation
+                // 没有候选时待提交文本为空，提交译文会插入空串并丢掉输入
+                return pendingText.isEmpty ? .update : .commitTranslation
             case .escape, .up, .shiftTab:
                 focus = .candidates
                 return .update

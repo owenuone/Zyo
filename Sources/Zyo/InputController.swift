@@ -245,11 +245,14 @@ final class InputController: IMKInputController {
     }
 
     private func commitTranslation(_ client: IMKTextInput) {
+        // 没有可翻译的内容（如拼音没有候选）时不上屏，否则会插入空串并丢掉输入
+        guard !composer.pendingText.isEmpty else { return NSSound.beep() }
         if let text = composer.freshTranslation {
             return commit(text, to: client)
         }
         if composer.freshTranslationError != nil {
-            return translationUnavailable()
+            // 上次失败了就重新请求一次：偶发失败可以恢复，语言包刚装好也能直接用；仍失败时由 didTranslate 处理
+            requestedSource = nil
         }
         commitWhenTranslated = true
         scheduleTranslation(immediate: true)
@@ -318,7 +321,9 @@ final class InputController: IMKInputController {
         case let .failure(error):
             languagePackMissing = error is TranslatorError
             log.error("翻译失败: \(error.localizedDescription, privacy: .public)")
-            composer.applyTranslationFailure(error.localizedDescription, for: source)
+            // 系统错误描述可能是英文长句，译文行只显示简短提示，详情看日志
+            let message = languagePackMissing ? error.localizedDescription : "翻译失败 · 按 ↓ 回车重试"
+            composer.applyTranslationFailure(message, for: source)
         }
 
         guard let client = client() else { return }

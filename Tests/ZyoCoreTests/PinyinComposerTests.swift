@@ -278,3 +278,16 @@ private func type(_ input: String, into composer: inout Composer) {
     #expect(composer.rawInput == "选中xr")
     #expect(composer.forceCommitText() == "选中xr")
 }
+
+@Test @MainActor func translationRowWithoutCandidatesDoesNotCommit() {
+    let engine = FakeEngine()
+    engine.pages = [[]]
+    var composer = Composer(engine: engine)
+    type("xr", into: &composer)
+    #expect(composer.isComposing)
+    #expect(composer.pendingText.isEmpty)
+    _ = composer.handle(.down)
+    #expect(composer.handle(.enter) == .update)
+    #expect(composer.handle(.space) == .update)
+    #expect(composer.isComposing)
+}
