@@ -9,6 +9,8 @@ struct CandidatePanelModel {
     var translationDimmed = true
     /// 提示（flash）左侧的 SF Symbol 名，只在提示时设置
     var symbol: String?
+    /// 只显示图标的提示里，代替 SF Symbol 画的单个字（如「中」「英」）
+    var badge: String?
 }
 
 /// 全局唯一的候选窗，不抢焦点；点击通过回调交给当前激活的 InputController。
@@ -71,9 +73,12 @@ final class CandidatePanel {
         panel.orderOut(nil)
     }
 
-    /// 短暂显示一条提示（如切换方向、词库部署中），1 秒后自动隐藏
-    func flash(_ message: String, symbol: String, cursorRect: NSRect) {
-        show(CandidatePanelModel(translation: message, translationDimmed: false, symbol: symbol), cursorRect: cursorRect)
+    /// 短暂显示一条提示（如切换方向、词库部署中），1 秒后自动隐藏；`message` 为空时只显示图标
+    func flash(_ message: String = "", symbol: String? = nil, badge: String? = nil, cursorRect: NSRect) {
+        show(
+            CandidatePanelModel(translation: message, translationDimmed: false, symbol: symbol, badge: badge),
+            cursorRect: cursorRect
+        )
         flashHideTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(1))
             guard !Task.isCancelled else { return }
@@ -148,7 +153,7 @@ private final class CandidateView: NSView {
     private func translationString() -> NSAttributedString {
         let active = model.focus == .translation
         let color: NSColor = active ? .white : (model.translationDimmed ? .secondaryLabelColor : .labelColor)
-        let font = model.symbol == nil ? translationFont : flashFont
+        let font = model.symbol == nil && model.badge == nil ? translationFont : flashFont
         return NSAttributedString(string: model.translation, attributes: [.font: font, .foregroundColor: color])
     }
 
@@ -171,21 +176,24 @@ private final class CandidateView: NSView {
             with: NSSize(width: textWidth, height: .greatestFiniteMagnitude),
             options: [.usesLineFragmentOrigin, .usesFontLeading]
         )
-        symbolImage = model.symbol
+        symbolImage = model.badge.map(Self.badgeImage) ?? model.symbol
             .flatMap { NSImage(systemSymbolName: $0, accessibilityDescription: nil) }?
             .withSymbolConfiguration(
                 NSImage.SymbolConfiguration(pointSize: 15, weight: .medium)
                     .applying(.init(paletteColors: [.controlAccentColor]))
             )
-        let symbolWidth = symbolImage.map { ceil($0.size.width) + symbolGap } ?? 0
-        let rowWidth = symbolWidth + textWidth + itemPadX * 2
+        let gap = model.translation.isEmpty ? 0 : symbolGap
+        let symbolWidth = symbolImage.map { ceil($0.size.width) + gap } ?? 0
+        let textHeight = max(ceil(bounds.height), ceil(symbolImage?.size.height ?? 0))
+        // 只有图标时做成正圆
+        let rowWidth = max(symbolWidth + textWidth + itemPadX * 2, textHeight + itemPadY * 2)
         // 只有提示文字（flash）时没有候选行，也就不画分隔线
         separatorY = candidateRects.isEmpty ? nil : padding + rowHeight + separatorGap
         translationRect = NSRect(
             x: padding,
             y: separatorY.map { $0 + 1 + separatorGap } ?? padding,
             width: rowWidth,
-            height: ceil(bounds.height) + itemPadY * 2
+            height: textHeight + itemPadY * 2
         )
         // 文字比候选行窄时，译文行与候选行同宽，高亮才能左右对齐
         translationRect.size.width = max(translationRect.width, candidateRowWidth)
@@ -224,13 +232,27 @@ private final class CandidateView: NSView {
         var textRect = translationRect.insetBy(dx: itemPadX, dy: itemPadY)
         if let symbolImage {
             let size = symbolImage.size
+            let x = model.translation.isEmpty ? translationRect.midX - size.width / 2 : textRect.minX
             symbolImage.draw(in: NSRect(
-                x: textRect.minX, y: textRect.midY - size.height / 2, width: size.width, height: size.height
+                x: x, y: textRect.midY - size.height / 2, width: size.width, height: size.height
             ))
             textRect.origin.x += ceil(size.width) + symbolGap
             textRect.size.width -= ceil(size.width) + symbolGap
         }
         translationString().draw(with: textRect, options: [.usesLineFragmentOrigin, .usesFontLeading])
+    }
+
+    /// 把单个字画成和 SF Symbol 同样大小、同样颜色的图标
+    private static func badgeImage(_ text: String) -> NSImage {
+        let string = NSAttributedString(string: text, attributes: [
+            .font: NSFont.systemFont(ofSize: 16, weight: .semibold),
+            .foregroundColor: NSColor.controlAccentColor,
+        ])
+        let size = string.size()
+        return NSImage(size: NSSize(width: ceil(size.width), height: ceil(size.height)), flipped: false) { _ in
+            string.draw(at: .zero)
+            return true
+        }
     }
 
     /// 单行时是胶囊形；译文折成多行时圆角封顶，避免变成椭圆

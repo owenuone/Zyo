@@ -125,7 +125,7 @@ final class InputController: IMKInputController {
         if composer.isComposing { commit(composer.forceCommitText(), to: client) }
         Self.direction = composer.direction == .chineseToForeign ? .foreignToChinese : .chineseToForeign
         switchDirection(to: Self.direction, client: client)
-        panel.flash(Self.direction.label, symbol: "translate", cursorRect: cursorRect(of: client))
+        panel.flash(badge: Self.badge(for: Self.direction), cursorRect: cursorRect(of: client))
     }
 
     /// 从字游切到英文时，正在输入的原样按键上屏（拼音模式误打的英文单词可以这样直接出）
@@ -135,13 +135,22 @@ final class InputController: IMKInputController {
         case .translate:
             if composer.isComposing { commit(composer.rawInput, to: client) }
             Self.mode = .lowercase
-            panel.flash("英文小写", symbol: "keyboard", cursorRect: rect)
+            panel.flash(symbol: "textformat.abc", cursorRect: rect)
         case .lowercase:
             Self.mode = .uppercase
-            panel.flash("英文大写", symbol: "capslock.fill", cursorRect: rect)
+            panel.flash(symbol: "capslock.fill", cursorRect: rect)
         case .uppercase:
             Self.mode = .translate
-            panel.flash(composer.direction.label, symbol: "translate", cursorRect: rect)
+            panel.flash(badge: Self.badge(for: composer.direction), cursorRect: rect)
+        }
+    }
+
+    /// 方向提示只显示当前在打的语言：中→外显示「中」，外→中显示外语名首字（英、法…）
+    private static func badge(for direction: Direction) -> String {
+        switch direction {
+        case .chineseToForeign: "中"
+        case .foreignToChinese:
+            String(Preferences.languageName(Preferences.inputLanguage(for: Preferences.foreignLanguage)).prefix(1))
         }
     }
 
