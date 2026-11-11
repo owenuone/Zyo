@@ -36,14 +36,15 @@ final class AppleTranslator {
         return result
     }
 
-    /// 中文 ⇄ 该外语两个方向都已下载才算可用
-    func languagesInstalled(foreign: String) async -> Bool {
+    /// 中文 ⇄ 该外语两个方向中第一个未下载的语言对，都已下载时返回 nil。
+    /// 非拉丁外语的外→中方向回退为英语→中文，可能与中→外不在同一个语言包里
+    func missingLanguages(foreign: String) async -> (source: Locale.Language, target: Locale.Language)? {
         let availability = LanguageAvailability()
         for direction in Direction.allCases {
             let (source, target) = Self.languages(for: direction, foreign: foreign)
-            guard await availability.status(from: source, to: target) == .installed else { return false }
+            if await availability.status(from: source, to: target) != .installed { return (source, target) }
         }
-        return true
+        return nil
     }
 
     private static func normalized(_ text: String) -> String {

@@ -120,6 +120,7 @@ private struct SettingsView: View {
     @State private var foreignLanguage = Preferences.foreignLanguage
     @State private var packStatus = PackStatus.checking
     @State private var downloadConfiguration: TranslationSession.Configuration?
+    @State private var missingLanguages: (source: Locale.Language, target: Locale.Language)?
 
     var body: some View {
         Form {
@@ -177,8 +178,15 @@ private struct SettingsView: View {
                 try await session.prepareTranslation()
             } catch {
                 log.error("下载语言包失败: \(error.localizedDescription, privacy: .public)")
+                return await refreshPackStatus()
             }
+            let downloaded = downloadConfiguration
             await refreshPackStatus()
+            // 非拉丁外语可能要下两组（中→外、英→中），装好一组后接着下另一组
+            if let missing = missingLanguages,
+               missing.source != downloaded?.source || missing.target != downloaded?.target {
+                startDownload()
+            }
         }
     }
 
@@ -196,10 +204,11 @@ private struct SettingsView: View {
         }
     }
 
+    /// 下载第一个未安装的语言对
     private func startDownload() {
+        guard let (source, target) = missingLanguages else { return }
         packStatus = .downloading
-        let (source, target) = AppleTranslator.languages(for: .chineseToForeign, foreign: foreignLanguage)
-        if downloadConfiguration?.target == target {
+        if downloadConfiguration?.source == source, downloadConfiguration?.target == target {
             downloadConfiguration?.invalidate()
         } else {
             downloadConfiguration = TranslationSession.Configuration(source: source, target: target)
@@ -209,7 +218,7 @@ private struct SettingsView: View {
     @MainActor
     private func refreshPackStatus() async {
         packStatus = .checking
-        let installed = await AppleTranslator.shared.languagesInstalled(foreign: foreignLanguage)
-        packStatus = installed ? .installed : .missing
+        missingLanguages = await AppleTranslator.shared.missingLanguages(foreign: foreignLanguage)
+        packStatus = missingLanguages == nil ? .installed : .missing
     }
 }

@@ -75,6 +75,9 @@ final class CandidatePanel {
 
     /// 短暂显示一条提示（如切换方向、词库部署中），1 秒后自动隐藏；`message` 为空时只显示图标
     func flash(_ message: String = "", symbol: String? = nil, badge: String? = nil, cursorRect: NSRect) {
+        // 提示不可点击；不清掉的话会调到上一次输入的回调，点击时发出提示音
+        onSelectCandidate = nil
+        onCommitTranslation = nil
         show(
             CandidatePanelModel(translation: message, translationDimmed: false, symbol: symbol, badge: badge),
             cursorRect: cursorRect

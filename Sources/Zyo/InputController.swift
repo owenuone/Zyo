@@ -14,6 +14,8 @@ final class InputController: IMKInputController {
     private lazy var composer = makeComposer(for: Self.direction)
     private var translationTask: Task<Void, Never>?
     private var requestedSource: String?
+    /// 当前请求还在防抖等待中，尚未发给翻译框架
+    private var debouncing = false
     private var commitWhenTranslated = false
     private var commitTimeoutTask: Task<Void, Never>?
     private var languagePackMissing = false
@@ -233,8 +235,9 @@ final class InputController: IMKInputController {
                 commitWhenTranslated = false
                 commitTimeoutTask?.cancel()
             }
-            render(client)
+            // 先调度：缓存命中时译文同步写入，只渲染一次
             scheduleTranslation()
+            render(client)
         case let .commit(text):
             commit(text, to: client)
         case .commitTranslation:
@@ -288,6 +291,7 @@ final class InputController: IMKInputController {
         translationTask?.cancel()
         translationTask = nil
         requestedSource = nil
+        debouncing = false
         commitWhenTranslated = false
         commitTimeoutTask?.cancel()
         commitTimeoutTask = nil
@@ -296,20 +300,26 @@ final class InputController: IMKInputController {
 
     // MARK: 翻译
 
+    /// 缓存命中时只写入译文、不渲染，由调用方渲染
     private func scheduleTranslation(immediate: Bool = false) {
         let source = composer.pendingText
         let direction = composer.direction
-        guard source != requestedSource else { return }
+        // 同一原文已在请求中就不重发；但要立即提交时不能再等剩下的防抖时间
+        guard source != requestedSource || (immediate && debouncing) else { return }
         requestedSource = source
         translationTask?.cancel()
+        debouncing = !immediate
         if let cached = AppleTranslator.shared.cachedTranslation(source, direction: direction) {
             translationTask = nil
-            return didTranslate(.success(cached), for: source)
+            debouncing = false
+            applyTranslationResult(.success(cached), for: source)
+            return
         }
         translationTask = Task { [weak self] in
             if !immediate {
                 try? await Task.sleep(for: Self.debounce)
                 guard !Task.isCancelled else { return }
+                self?.debouncing = false
             }
             let result: Result<String, Error>
             do {
@@ -323,6 +333,13 @@ final class InputController: IMKInputController {
     }
 
     private func didTranslate(_ result: Result<String, Error>, for source: String) {
+        guard !applyTranslationResult(result, for: source), let client = client() else { return }
+        render(client)
+    }
+
+    /// 写入译文；正在等译文上屏时直接上屏。返回是否已上屏
+    @discardableResult
+    private func applyTranslationResult(_ result: Result<String, Error>, for source: String) -> Bool {
         languagePackMissing = false
         switch result {
         case let .success(text):
@@ -335,17 +352,16 @@ final class InputController: IMKInputController {
             composer.applyTranslationFailure(message, for: source)
         }
 
-        guard let client = client() else { return }
-        if commitWhenTranslated {
-            if let text = composer.freshTranslation {
-                return commit(text, to: client)
-            }
-            if composer.freshTranslationError != nil {
-                commitWhenTranslated = false
-                translationUnavailable()
-            }
+        guard commitWhenTranslated else { return false }
+        if let text = composer.freshTranslation, let client = client() {
+            commit(text, to: client)
+            return true
         }
-        render(client)
+        if composer.freshTranslationError != nil {
+            commitWhenTranslated = false
+            translationUnavailable()
+        }
+        return false
     }
 
     // MARK: 渲染
