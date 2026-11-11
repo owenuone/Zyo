@@ -6,18 +6,11 @@ import ZyoCore
 @MainActor
 @objc(ZyoInputController)
 final class InputController: IMKInputController {
-    private static let debounce: Duration = .milliseconds(250)
-    private static let commitWaitTimeout: Duration = .seconds(1)
     private static let notFound = NSRange(location: NSNotFound, length: 0)
 
     private lazy var rimeEngine = RimeEngine()
     private lazy var composer = makeComposer(for: Self.direction)
-    private var translationTask: Task<Void, Never>?
-    private var requestedSource: String?
-    /// 当前请求还在防抖等待中，尚未发给翻译框架
-    private var debouncing = false
-    private var commitWhenTranslated = false
-    private var commitTimeoutTask: Task<Void, Never>?
+    private lazy var translation = makeTranslationScheduler()
     private var languagePackMissing = false
 
     /// 翻译方向在所有输入会话间共享，不持久化，进程重启后回到中→外
@@ -188,13 +181,8 @@ final class InputController: IMKInputController {
         case .passThrough:
             return false
         case .update:
-            // 等译文期间输入变了，不能把新输入的译文自动上屏
-            if composer.pendingText != requestedSource {
-                commitWhenTranslated = false
-                commitTimeoutTask?.cancel()
-            }
             // 先调度：缓存命中时译文同步写入，只渲染一次
-            scheduleTranslation()
+            translation.request(composer.pendingText, direction: composer.direction)
             render(client)
         case let .commit(text):
             commit(text, to: client)
@@ -220,19 +208,10 @@ final class InputController: IMKInputController {
         if let text = composer.freshTranslation {
             return commit(text, to: client)
         }
-        if composer.freshTranslationError != nil {
-            // 上次失败了就重新请求一次：偶发失败可以恢复，语言包刚装好也能直接用；仍失败时由 didTranslate 处理
-            requestedSource = nil
-        }
-        commitWhenTranslated = true
-        scheduleTranslation(immediate: true)
-        commitTimeoutTask?.cancel()
-        commitTimeoutTask = Task { [weak self] in
-            try? await Task.sleep(for: Self.commitWaitTimeout)
-            guard !Task.isCancelled, let self, self.commitWhenTranslated else { return }
-            self.commitWhenTranslated = false
-            NSSound.beep()
-        }
+        // 上次失败了就重新请求一次：偶发失败可以恢复，语言包刚装好也能直接用；仍失败时由 didTranslate 处理
+        translation.waitToCommit(
+            composer.pendingText, direction: composer.direction, retry: composer.freshTranslationError != nil
+        )
     }
 
     /// 语言包缺失时打开设置窗口引导下载，其他错误只提示音
@@ -246,58 +225,23 @@ final class InputController: IMKInputController {
 
     private func reset() {
         composer.reset()
-        translationTask?.cancel()
-        translationTask = nil
-        requestedSource = nil
-        debouncing = false
-        commitWhenTranslated = false
-        commitTimeoutTask?.cancel()
-        commitTimeoutTask = nil
+        translation.reset()
         panel.hide()
     }
 
     // MARK: 翻译
 
-    /// 缓存命中时只写入译文、不渲染，由调用方渲染
-    private func scheduleTranslation(immediate: Bool = false) {
-        let source = composer.pendingText
-        let direction = composer.direction
-        // 同一原文已在请求中就不重发；但要立即提交时不能再等剩下的防抖时间
-        guard source != requestedSource || (immediate && debouncing) else { return }
-        requestedSource = source
-        translationTask?.cancel()
-        debouncing = !immediate
-        if let cached = AppleTranslator.shared.cachedTranslation(source, direction: direction) {
-            translationTask = nil
-            debouncing = false
-            applyTranslationResult(.success(cached), for: source)
-            return
+    private func makeTranslationScheduler() -> TranslationScheduler {
+        let scheduler = TranslationScheduler(translator: AppleTranslator.shared)
+        scheduler.onResult = { [weak self] result, source, cached in
+            self?.didTranslate(result, for: source, cached: cached)
         }
-        translationTask = Task { [weak self] in
-            if !immediate {
-                try? await Task.sleep(for: Self.debounce)
-                guard !Task.isCancelled else { return }
-                self?.debouncing = false
-            }
-            let result: Result<String, Error>
-            do {
-                result = .success(try await AppleTranslator.shared.translate(source, direction: direction))
-            } catch {
-                result = .failure(error)
-            }
-            guard !Task.isCancelled, let self else { return }
-            self.didTranslate(result, for: source)
-        }
+        scheduler.onCommitTimeout = { NSSound.beep() }
+        return scheduler
     }
 
-    private func didTranslate(_ result: Result<String, Error>, for source: String) {
-        guard !applyTranslationResult(result, for: source), let client = client() else { return }
-        render(client)
-    }
-
-    /// 写入译文；正在等译文上屏时直接上屏。返回是否已上屏
-    @discardableResult
-    private func applyTranslationResult(_ result: Result<String, Error>, for source: String) -> Bool {
+    /// 写入译文；正在等译文上屏时直接上屏。缓存命中（同步给出）时不渲染，由调用方渲染
+    private func didTranslate(_ result: Result<String, Error>, for source: String, cached: Bool) {
         languagePackMissing = false
         switch result {
         case let .success(text):
@@ -310,16 +254,17 @@ final class InputController: IMKInputController {
             composer.applyTranslationFailure(message, for: source)
         }
 
-        guard commitWhenTranslated else { return false }
-        if let text = composer.freshTranslation, let client = client() {
-            commit(text, to: client)
-            return true
+        if translation.isWaitingToCommit {
+            if let text = composer.freshTranslation, let client = client() {
+                return commit(text, to: client)
+            }
+            if composer.freshTranslationError != nil {
+                translation.cancelCommitWait()
+                translationUnavailable()
+            }
         }
-        if composer.freshTranslationError != nil {
-            commitWhenTranslated = false
-            translationUnavailable()
-        }
-        return false
+        guard !cached, let client = client() else { return }
+        render(client)
     }
 
     // MARK: 渲染

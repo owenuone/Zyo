@@ -15,7 +15,7 @@ enum TranslatorError: LocalizedError {
 
 /// 只使用已下载的离线模型，不弹任何系统界面。外语读自 Preferences.foreignLanguage。
 @MainActor
-final class AppleTranslator {
+final class AppleTranslator: Translating {
     static let shared = AppleTranslator()
 
     /// key = 语言对，换外语后旧会话保留，切回来可直接复用
