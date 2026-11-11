@@ -160,7 +160,7 @@ private struct SettingsView: View {
 
             Section("快捷键") {
                 LabeledContent("切换方向") { KeyCaps(["⇧ Shift"]) }
-                LabeledContent("切换输入") { KeyCaps(["⇪ Caps Lock"]) }
+                LabeledContent("切换 ABC") { KeyCaps(["⇪ Caps Lock"]) }
                 LabeledContent("切换译文") { KeyCaps(["↓", "Tab"]) }
                 LabeledContent("切换高亮") { KeyCaps(["←", "→"]) }
                 LabeledContent("翻页") { KeyCaps(["-", "="]) }

@@ -89,29 +89,18 @@ final class InputController: IMKInputController {
             handleShift(event, client: client)
             return false
         case Self.keyCodeCapsLock:
-            // Electron App（Termius、1Password）每按一次会把事件交给输入法两次，相隔几十毫秒，短时间内的后续事件忽略
-            guard event.timestamp - Self.lastCapsLockPress > Self.capsLockIgnoreWindow else { return true }
-            Self.lastCapsLockPress = event.timestamp
-            cycleMode(client)
-            return true
+            // 中英切换交给系统「使用大写锁定键切换"ABC"输入法」，和系统输入法一样；
+            // 正在输入时先把原样按键上屏（拼音模式误打的英文单词可以这样直接出）
+            shiftPressedAt = nil
+            if composer.isComposing { commit(composer.rawInput, to: client) }
+            return false
         default:
             shiftPressedAt = nil
             return false
         }
     }
 
-    private enum Mode {
-        case translate, lowercase, uppercase
-    }
-
-    /// Caps Lock 循环切换：字游 → 英文小写 → 英文大写。灯只有亮灭两态，对不上三个状态，所以不看灯、自己记。
-    /// 在所有输入会话间共享，不持久化
-    private static var mode = Mode.translate
-    private static var directEnglish: Bool { mode != .translate }
-    private static var lastCapsLockPress: TimeInterval = 0
-    private static let capsLockIgnoreWindow: TimeInterval = 0.4
-
-    /// 单按 Shift（按下后 0.5s 内松开，中间没有按其他键）切换翻译方向；直接英文下忽略
+    /// 单按 Shift（按下后 0.5s 内松开，中间没有按其他键）切换翻译方向
     private func handleShift(_ event: NSEvent, client: IMKTextInput) {
         let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask).subtracting(.capsLock)
         if modifiers == .shift {
@@ -119,7 +108,7 @@ final class InputController: IMKInputController {
             return
         }
         defer { shiftPressedAt = nil }
-        guard modifiers.isEmpty, !Self.directEnglish, let pressedAt = shiftPressedAt,
+        guard modifiers.isEmpty, let pressedAt = shiftPressedAt,
               event.timestamp - pressedAt < Self.shiftTapMaxDuration else { return }
         toggleDirection(client)
     }
@@ -129,23 +118,6 @@ final class InputController: IMKInputController {
         Self.direction = composer.direction == .chineseToForeign ? .foreignToChinese : .chineseToForeign
         switchDirection(to: Self.direction, client: client)
         panel.flash(badge: Self.badge(for: Self.direction), cursorRect: cursorRect(of: client))
-    }
-
-    /// 从字游切到英文时，正在输入的原样按键上屏（拼音模式误打的英文单词可以这样直接出）
-    private func cycleMode(_ client: IMKTextInput) {
-        let rect = cursorRect(of: client)
-        switch Self.mode {
-        case .translate:
-            if composer.isComposing { commit(composer.rawInput, to: client) }
-            Self.mode = .lowercase
-            panel.flash(symbol: "textformat.abc", cursorRect: rect)
-        case .lowercase:
-            Self.mode = .uppercase
-            panel.flash(symbol: "capslock.fill", cursorRect: rect)
-        case .uppercase:
-            Self.mode = .translate
-            panel.flash(badge: Self.badge(for: composer.direction), cursorRect: rect)
-        }
     }
 
     /// 方向提示只显示当前在打的语言：中→外显示「中」，外→中显示外语名首字（英、法…）
@@ -162,9 +134,6 @@ final class InputController: IMKInputController {
         guard let event, event.type == .keyDown, let client else { return false }
 
         let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        if Self.directEnglish {
-            return insertDirectEnglish(event, modifiers: modifiers, client: client)
-        }
         if !modifiers.isDisjoint(with: [.command, .control, .option]) {
             // 组合键交给 App 处理；正在输入时先把当前内容上屏，避免快捷键作用在 marked text 上
             if composer.isComposing { commit(composer.forceCommitText(), to: client) }
@@ -174,25 +143,17 @@ final class InputController: IMKInputController {
         guard let key = Self.key(for: event, modifiers: modifiers) else {
             return composer.isComposing
         }
+        // 大写锁定打开时（没开系统的 Caps Lock 切换 ABC，或长按打开）字母原样交给 App，和系统输入法一样直接出大写
+        if modifiers.contains(.capsLock), case let .character(c) = key, c.isLetter {
+            if composer.isComposing { commit(composer.forceCommitText(), to: client) }
+            return false
+        }
         if composer.direction == .chineseToForeign, !RimeRuntime.shared.isReady,
            case let .character(c) = key, c.isASCII, c.isLetter {
             panel.flash("词库部署中，请稍候…", symbol: "hourglass", cursorRect: cursorRect(of: client))
             return true
         }
         return perform(composer.handle(key), client: client)
-    }
-
-    /// 小写模式下大小写由 Shift 决定；大写模式下和系统大写锁定一样，按不按 Shift 都是大写。
-    /// 按键本身打出的字母已经符合要求时原样交还 App（vim、网页 j/k 等单字母快捷键要的是按键事件）；
-    /// Caps Lock 灯的状态和小写/大写对不上，大小写不符时才由输入法 insertText
-    private func insertDirectEnglish(_ event: NSEvent, modifiers: NSEvent.ModifierFlags, client: IMKTextInput) -> Bool {
-        guard modifiers.isDisjoint(with: [.command, .control, .option]),
-              case let .character(c)? = Self.key(for: event, modifiers: modifiers), c.isLetter
-        else { return false }
-        let text = Self.mode == .uppercase ? c.uppercased() : String(c)
-        if event.characters == text { return false }
-        client.insertText(text, replacementRange: Self.notFound)
-        return true
     }
 
     private static let keyCodeCapsLock: UInt16 = 57
@@ -217,10 +178,6 @@ final class InputController: IMKInputController {
                   // Forward Delete、Home、F1 等功能键的字符在私有区 U+F700–U+F8FF，不是可输入字符
                   !c.unicodeScalars.contains(where: { (0xF700...0xF8FF).contains($0.value) })
             else { return nil }
-            // Caps Lock 用来切换直接英文，不应让英文输入变成大写，大小写只由 Shift 决定
-            if modifiers.contains(.capsLock), c.isLetter {
-                return .character(Character(shift ? c.uppercased() : c.lowercased()))
-            }
             return .character(c)
         }
     }
@@ -449,12 +406,7 @@ final class InputController: IMKInputController {
 
     private func buildMenu() -> NSMenu {
         let menu = NSMenu()
-        let current = switch Self.mode {
-        case .translate: "\(composer.direction.label)（Shift 切换方向）"
-        case .lowercase: "英文小写（Caps Lock 切换）"
-        case .uppercase: "英文大写（Caps Lock 切换）"
-        }
-        menu.addItem(NSMenuItem(title: "当前：\(current)", action: nil, keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "当前：\(composer.direction.label)（Shift 切换方向）", action: nil, keyEquivalent: ""))
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "设置…", action: #selector(showSettings(_:)), keyEquivalent: ""))
         return menu
