@@ -29,9 +29,21 @@ final class AppleTranslator {
     func translate(_ text: String, direction: Direction) async throws -> String {
         let trimmed = Self.normalized(text)
         guard !trimmed.isEmpty else { return "" }
-        let pair = Self.pairKey(for: direction)
-        let session = try await readySession(for: direction, pair: pair)
-        let result = try await session.translate(trimmed).targetText
+        let (source, target) = Self.languages(for: direction)
+        let pair = Self.pairKey(source, target)
+        let session = try await readySession(source: source, target: target, pair: pair)
+        let result: String
+        do {
+            result = try await session.translate(trimmed).targetText
+        } catch {
+            if error is CancellationError || Task.isCancelled { throw error }
+            // 语言包可能在 session 创建后被删除：丢掉 session，下次重新检查；未安装时改报缺语言包，引导下载
+            sessions[pair] = nil
+            if await LanguageAvailability().status(from: source, to: target) != .installed {
+                throw TranslatorError.languageNotInstalled
+            }
+            throw error
+        }
         cache.insert(result, for: trimmed, pair: pair)
         return result
     }
@@ -53,12 +65,17 @@ final class AppleTranslator {
 
     private static func pairKey(for direction: Direction) -> String {
         let (source, target) = languages(for: direction)
-        return "\(source.minimalIdentifier)>\(target.minimalIdentifier)"
+        return pairKey(source, target)
     }
 
-    private func readySession(for direction: Direction, pair: String) async throws -> TranslationSession {
+    private static func pairKey(_ source: Locale.Language, _ target: Locale.Language) -> String {
+        "\(source.minimalIdentifier)>\(target.minimalIdentifier)"
+    }
+
+    private func readySession(
+        source: Locale.Language, target: Locale.Language, pair: String
+    ) async throws -> TranslationSession {
         if let session = sessions[pair] { return session }
-        let (source, target) = Self.languages(for: direction)
         // 未安装时每次都重新检查，用户装好语言包后无需重启输入法
         let status = await LanguageAvailability().status(from: source, to: target)
         guard status == .installed else { throw TranslatorError.languageNotInstalled }

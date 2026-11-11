@@ -11,6 +11,8 @@ struct CandidatePanelModel {
     var symbol: String?
     /// 只显示图标的提示里，代替 SF Symbol 画的单个字（如「中」「英」）
     var badge: String?
+    /// 提示（flash）不响应悬停和点击
+    var interactive = true
 }
 
 /// 全局唯一的候选窗，不抢焦点；点击通过回调交给当前激活的 InputController。
@@ -79,7 +81,9 @@ final class CandidatePanel {
         onSelectCandidate = nil
         onCommitTranslation = nil
         show(
-            CandidatePanelModel(translation: message, translationDimmed: false, symbol: symbol, badge: badge),
+            CandidatePanelModel(
+                translation: message, translationDimmed: false, symbol: symbol, badge: badge, interactive: false
+            ),
             cursorRect: cursorRect
         )
         flashHideTask = Task { [weak self] in
@@ -101,6 +105,8 @@ private final class CandidateView: NSView {
 
     var model = CandidatePanelModel() {
         didSet {
+            // 鼠标停在原处时切到提示，旧的悬停高亮不能留着
+            if !model.interactive { hovered = nil }
             relayout()
             needsDisplay = true
         }
@@ -277,6 +283,7 @@ private final class CandidateView: NSView {
     }
 
     private func target(at event: NSEvent) -> Target? {
+        guard model.interactive else { return nil }
         let point = convert(event.locationInWindow, from: nil)
         if let index = candidateRects.firstIndex(where: { $0.contains(point) }) {
             return .candidate(index)

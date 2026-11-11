@@ -23,7 +23,8 @@ final class InputController: IMKInputController {
     /// 翻译方向在所有输入会话间共享，不持久化，进程重启后回到中→外
     private static var direction: Direction = .chineseToForeign
     private static let shiftTapMaxDuration: TimeInterval = 0.5
-    private var shiftPressedAt: Date?
+    /// Shift 按下时的事件时间戳（开机以来的秒数，不受系统改时间影响）
+    private var shiftPressedAt: TimeInterval?
 
     private var panel: CandidatePanel { .shared }
 
@@ -114,12 +115,12 @@ final class InputController: IMKInputController {
     private func handleShift(_ event: NSEvent, client: IMKTextInput) {
         let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask).subtracting(.capsLock)
         if modifiers == .shift {
-            shiftPressedAt = Date()
+            shiftPressedAt = event.timestamp
             return
         }
         defer { shiftPressedAt = nil }
         guard modifiers.isEmpty, !Self.directEnglish, let pressedAt = shiftPressedAt,
-              Date().timeIntervalSince(pressedAt) < Self.shiftTapMaxDuration else { return }
+              event.timestamp - pressedAt < Self.shiftTapMaxDuration else { return }
         toggleDirection(client)
     }
 
