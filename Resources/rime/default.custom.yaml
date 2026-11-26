@@ -10,3 +10,4 @@ patch:
     - schema: wubi06
     - schema: pinyin_simp  # 五笔 z 键拼音反查的词典，列在这里才会被编译；设置窗口不显示
   menu/page_size: 6
+  punctuator/digit_separator_action: commit  # 数字后的 , . : 直接上屏半角，不进入输入等下一个数字
